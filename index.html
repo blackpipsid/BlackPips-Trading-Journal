@@ -386,14 +386,14 @@ select option { background:var(--s2); }
       </div>
       <div class="field">
         <label>PAIR</label>
-        <select id="fPairE">
+        <select id="fPairE" onchange="autoCalc()">
           <option>XAUUSD</option><option>EURUSD</option><option>AUDUSD</option>
           <option>USDCHF</option><option>USDJPY</option><option>GBPJPY</option><option>CHFJPY</option>
         </select>
       </div>
       <div class="field">
         <label>DIRECTION</label>
-        <select id="fDirE">
+        <select id="fDirE" onchange="autoCalc()">
           <option>Buy</option><option>Sell</option>
         </select>
       </div>
@@ -413,7 +413,7 @@ select option { background:var(--s2); }
       </div>
       <div class="field">
         <label>RESULT</label>
-        <select id="fResult2">
+        <select id="fResult2" onchange="onResultChange()">
           <option>Running</option><option>Win</option><option>Loss</option><option>BE</option>
         </select>
       </div>
@@ -423,37 +423,50 @@ select option { background:var(--s2); }
     <div class="form-grid form-grid-3">
       <div class="field">
         <label>ENTRY</label>
-        <input type="number" id="fEntry" step="any" placeholder="0.00" oninput="calcRR()">
+        <input type="number" id="fEntry" step="any" placeholder="0.00" oninput="autoCalc()">
       </div>
       <div class="field">
         <label>STOP LOSS</label>
-        <input type="number" id="fSL" step="any" placeholder="0.00" oninput="calcRR()">
+        <input type="number" id="fSL" step="any" placeholder="0.00" oninput="autoCalc()">
       </div>
       <div class="field">
         <label>TAKE PROFIT</label>
-        <input type="number" id="fTP" step="any" placeholder="0.00" oninput="calcRR()">
+        <input type="number" id="fTP" step="any" placeholder="0.00" oninput="autoCalc()">
       </div>
     </div>
-    <div class="rr-auto" id="rrPreview" style="display:none;padding:6px 10px;background:rgba(0,229,160,.07);border-radius:6px;margin-top:4px;"></div>
 
-    <div class="form-section-title" style="margin-top:16px">LOT SIZE & P&L</div>
+    <!-- EXIT PRICE -->
+    <div class="field" style="margin-top:10px">
+      <label>EXIT PRICE <span style="color:var(--green);font-size:9px">← AUTO dari TP/SL, bisa override manual</span></label>
+      <input type="number" id="fExit" step="any" placeholder="Auto-fill saat pilih Win/Loss/BE" oninput="autoCalc()">
+    </div>
+
+    <div id="rrPreview" style="display:none;padding:8px 12px;background:rgba(0,229,160,.07);border:1px solid rgba(0,229,160,.15);border-radius:7px;margin-top:8px;font-size:11px;line-height:1.9;color:var(--green)"></div>
+    <div id="calcPreview" style="display:none;padding:8px 12px;background:rgba(68,170,255,.06);border:1px solid rgba(68,170,255,.12);border-radius:7px;margin-top:6px;font-size:11px;line-height:1.9;color:var(--blue)"></div>
+
+    <div class="form-section-title" style="margin-top:16px">LOT SIZE</div>
+    <div class="field">
+      <label>LOT SIZE</label>
+      <input type="number" id="fLot" step="any" placeholder="0.01" oninput="autoCalc()">
+    </div>
+
+    <div class="form-section-title" style="margin-top:14px">HASIL (AUTO-CALCULATED ✨)</div>
     <div class="form-grid form-grid-3">
       <div class="field">
-        <label>LOT SIZE</label>
-        <input type="number" id="fLot" step="any" placeholder="0.01">
+        <label>P&L PIPS <span style="color:var(--t3)">auto</span></label>
+        <input type="number" id="fPips" step="any" placeholder="auto" style="border-color:rgba(0,229,160,.2)">
       </div>
       <div class="field">
-        <label>P&L (PIPS)</label>
-        <input type="number" id="fPips" step="any" placeholder="0.0">
+        <label>P&L ($) <span style="color:var(--t3)">auto</span></label>
+        <input type="number" id="fUsd" step="any" placeholder="auto" style="border-color:rgba(0,229,160,.2)">
       </div>
       <div class="field">
-        <label>P&L ($)</label>
-        <input type="number" id="fUsd" step="any" placeholder="0.00">
+        <label>ACTUAL RR <span style="color:var(--t3)">auto</span></label>
+        <input type="number" id="fRR" step="any" placeholder="auto" style="border-color:rgba(0,229,160,.2)">
       </div>
     </div>
-    <div class="field" style="margin-top:10px">
-      <label>ACTUAL RR</label>
-      <input type="number" id="fRR" step="any" placeholder="e.g. 2.5 = 1:2.5">
+    <div style="font-size:9px;color:var(--t3);margin-top:5px;padding:0 2px">
+      ⚡ Bisa override manual jika angka tidak sesuai. Pip value: JPY pairs ~$6.5/pip/lot, lainnya ~$10/pip/lot
     </div>
 
     <div class="form-section-title" style="margin-top:16px">NOTES / SETUP RATIONALE</div>
@@ -1002,19 +1015,109 @@ function drawPieChart() {
 // ============================================================
 // FORM: SAVE / EDIT / DELETE
 // ============================================================
-function calcRR() {
-  const entry=parseFloat(document.getElementById('fEntry').value);
-  const sl=parseFloat(document.getElementById('fSL').value);
-  const tp=parseFloat(document.getElementById('fTP').value);
-  const dir=document.getElementById('fDirE').value;
-  const prev=document.getElementById('rrPreview');
-  if(!entry||!sl||!tp) { prev.style.display='none'; return; }
-  const risk=Math.abs(entry-sl);
-  const reward=Math.abs(tp-entry);
-  if(!risk) { prev.style.display='none'; return; }
-  const rr=(reward/risk).toFixed(2);
-  prev.style.display='block';
-  prev.textContent=`📐 Planned RR: 1:${rr} | Risk: ${risk.toFixed(5)} | Reward: ${reward.toFixed(5)}`;
+// Pip multiplier & value per lot per pair
+const PIP_MULTI = {
+  EURUSD:10000, AUDUSD:10000, USDCHF:10000,
+  USDJPY:100, GBPJPY:100, CHFJPY:100,
+  XAUUSD:10
+};
+const PIP_VAL = {
+  EURUSD:10, AUDUSD:10, USDCHF:10,
+  USDJPY:6.5, GBPJPY:6.5, CHFJPY:6.5,
+  XAUUSD:10
+};
+
+function onResultChange() {
+  const result = document.getElementById('fResult2').value;
+  const tp = document.getElementById('fTP').value;
+  const sl = document.getElementById('fSL').value;
+  const entry = document.getElementById('fEntry').value;
+  const exitEl = document.getElementById('fExit');
+  if(result === 'Win' && tp) exitEl.value = tp;
+  else if(result === 'Loss' && sl) exitEl.value = sl;
+  else if(result === 'BE' && entry) exitEl.value = entry;
+  else if(result === 'Running') exitEl.value = '';
+  autoCalc();
+}
+
+function autoCalc() {
+  const entry  = parseFloat(document.getElementById('fEntry').value);
+  const sl     = parseFloat(document.getElementById('fSL').value);
+  const tp     = parseFloat(document.getElementById('fTP').value);
+  const exit   = parseFloat(document.getElementById('fExit').value);
+  const lot    = parseFloat(document.getElementById('fLot').value);
+  const pair   = document.getElementById('fPairE').value;
+  const dir    = document.getElementById('fDirE').value;
+  const result = document.getElementById('fResult2').value;
+
+  const rrPrev  = document.getElementById('rrPreview');
+  const calcPrev = document.getElementById('calcPreview');
+
+  // ── Planned RR (Entry + SL + TP) ──
+  if(entry && sl && tp) {
+    const risk   = Math.abs(entry - sl);
+    const reward = Math.abs(tp - entry);
+    const rr     = risk > 0 ? (reward / risk).toFixed(2) : '—';
+    const mult   = PIP_MULTI[pair] || 10000;
+    const riskPips   = (risk * mult).toFixed(1);
+    const rewardPips = (reward * mult).toFixed(1);
+    rrPrev.style.display = 'block';
+    rrPrev.innerHTML =
+      `📐 Planned RR: <b>1:${rr}</b> &nbsp;|&nbsp; Risk: ${riskPips} pips &nbsp;|&nbsp; Reward: ${rewardPips} pips`;
+  } else {
+    rrPrev.style.display = 'none';
+  }
+
+  // ── Auto-calc Pips, P&L $, Actual RR (Entry + Exit) ──
+  if(entry && exit && entry !== exit) {
+    const mult    = PIP_MULTI[pair] || 10000;
+    const pipVal  = PIP_VAL[pair] || 10;
+
+    const priceDiff = exit - entry;
+    // For Buy: positive diff = profit. For Sell: negative diff = profit
+    const rawPips = dir === 'Buy' ? priceDiff * mult : -priceDiff * mult;
+    const pips    = parseFloat(rawPips.toFixed(1));
+
+    // P&L $
+    let pnlUsd = 0;
+    if(lot) {
+      pnlUsd = parseFloat((pips * pipVal * lot).toFixed(2));
+    }
+
+    // Actual RR (need SL as reference for risk)
+    let actualRR = '';
+    if(sl && entry !== sl) {
+      const riskPips = Math.abs((entry - sl) * mult);
+      actualRR = riskPips > 0 ? Math.abs(rawPips / riskPips).toFixed(2) : '';
+    }
+
+    // Fill fields (only if user hasn't manually overridden)
+    document.getElementById('fPips').value = pips;
+    if(lot) document.getElementById('fUsd').value = pnlUsd;
+    if(actualRR) document.getElementById('fRR').value = actualRR;
+
+    // Preview box
+    const sign = pips >= 0 ? '+' : '';
+    const usdSign = pnlUsd >= 0 ? '+' : '';
+    calcPrev.style.display = 'block';
+    calcPrev.innerHTML =
+      `⚡ Exit: <b>${exit}</b> &nbsp;|&nbsp; Pips: <b>${sign}${pips}</b>`
+      + (lot ? ` &nbsp;|&nbsp; P&L: <b>${usdSign}$${pnlUsd}</b>` : ' &nbsp;|&nbsp; <i>isi lot untuk P&L $</i>')
+      + (actualRR ? ` &nbsp;|&nbsp; RR: <b>1:${actualRR}</b>` : '');
+  } else if(result === 'BE') {
+    document.getElementById('fPips').value = '0';
+    document.getElementById('fUsd').value = '0';
+    document.getElementById('fRR').value = '0';
+    calcPrev.style.display = 'block';
+    calcPrev.innerHTML = '⚡ Breakeven — Pips: 0, P&L: $0.00';
+  } else {
+    calcPrev.style.display = 'none';
+    if(result === 'Running') {
+      document.getElementById('fPips').value = '';
+      document.getElementById('fUsd').value = '';
+      document.getElementById('fRR').value = '';
+    }
+  }
 }
 
 function saveTrade() {
@@ -1024,6 +1127,7 @@ function saveTrade() {
   const entrVal=parseFloat(document.getElementById('fEntry').value);
   const slVal=parseFloat(document.getElementById('fSL').value);
   const tpVal=parseFloat(document.getElementById('fTP').value);
+  const pair=document.getElementById('fPairE').value;
   let rrPlan='';
   if(entrVal&&slVal&&tpVal) {
     const risk=Math.abs(entrVal-slVal);
@@ -1033,7 +1137,7 @@ function saveTrade() {
   const trade = {
     id: editingId || genId(),
     date: document.getElementById('fDate').value,
-    pair: document.getElementById('fPairE').value,
+    pair: pair,
     direction: document.getElementById('fDirE').value,
     session: document.getElementById('fSession').value,
     setup: document.getElementById('fSetup').value,
@@ -1041,6 +1145,7 @@ function saveTrade() {
     entry: document.getElementById('fEntry').value,
     sl: document.getElementById('fSL').value,
     tp: document.getElementById('fTP').value,
+    exit: document.getElementById('fExit').value,
     lot: document.getElementById('fLot').value,
     pnlPips: document.getElementById('fPips').value,
     pnlUsd: document.getElementById('fUsd').value,
@@ -1077,7 +1182,7 @@ function cancelEdit() {
   document.getElementById('fSession').value='London';
   document.getElementById('fSetup').value='Trend Follow';
   document.getElementById('fResult2').value='Running';
-  ['fEntry','fSL','fTP','fLot','fPips','fUsd','fRR','fNotes'].forEach(id=>document.getElementById(id).value='');
+  ['fEntry','fSL','fTP','fExit','fLot','fPips','fUsd','fRR','fNotes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('rrPreview').style.display='none';
 }
 
@@ -1094,6 +1199,7 @@ function editTrade(id) {
   document.getElementById('fEntry').value=t.entry||'';
   document.getElementById('fSL').value=t.sl||'';
   document.getElementById('fTP').value=t.tp||'';
+  document.getElementById('fExit').value=t.exit||'';
   document.getElementById('fLot').value=t.lot||'';
   document.getElementById('fPips').value=t.pnlPips||'';
   document.getElementById('fUsd').value=t.pnlUsd||'';
