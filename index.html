@@ -1394,11 +1394,11 @@ function renderCandles() {
     <div class="stats-title">7CANDLES PERFORMANCE</div>
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-val" style="color:${st.wr>=50?'var(--green)':'var(--red')}">${candleTrades.length?st.wr.toFixed(1)+'%':'—'}</div>
+        <div class="stat-val" style="color:${st.wr>=50?'var(--green)':'var(--red)'}">${candleTrades.length?st.wr.toFixed(1)+'%':'—'}</div>
         <div class="stat-lbl">WIN RATE</div>
       </div>
       <div class="stat-card">
-        <div class="stat-val" style="color:${st.totalPnl>=0?'var(--green)':'var(--red')}">${st.totalPnl>=0?'+':''}$${st.totalPnl.toFixed(2)}</div>
+        <div class="stat-val" style="color:${st.totalPnl>=0?'var(--green)':'var(--red)'}">${st.totalPnl>=0?'+':''}$${st.totalPnl.toFixed(2)}</div>
         <div class="stat-lbl">NET P&L</div>
       </div>
       <div class="stat-card">
@@ -1422,7 +1422,7 @@ function renderCandles() {
         <div class="stat-lbl">PROFIT FACTOR</div>
       </div>
       <div class="stat-card">
-        <div class="stat-val" style="color:${st.totalPnl>=0?'var(--green)':'var(--red')}">${allSt.totalPnl>0?((st.totalPnl/allSt.totalPnl)*100).toFixed(0)+'%':'—'}</div>
+        <div class="stat-val" style="color:${st.totalPnl>=0?'var(--green)':'var(--red)'}">${allSt.totalPnl>0?((st.totalPnl/allSt.totalPnl)*100).toFixed(0)+'%':'—'}</div>
         <div class="stat-lbl">% OF TOTAL</div>
       </div>
     </div>
