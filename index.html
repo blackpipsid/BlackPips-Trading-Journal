@@ -524,6 +524,30 @@ select option { background:var(--s2); }
       </label>
     </div>
 
+    <!-- SERVER SYNC -->
+    <div style="margin-top:20px;border-top:1px solid var(--b1);padding-top:16px;">
+      <div style="font-size:9px;color:var(--green);letter-spacing:2px;margin-bottom:10px;font-family:var(--fd);font-weight:700;">🌐 SERVER SYNC</div>
+      <div style="font-size:10px;color:var(--t2);margin-bottom:10px;line-height:1.8;">
+        Sync trade data dengan server VPS.<br>
+        Pull = download dari server ke browser ini.<br>
+        Push = upload dari browser ke server.
+      </div>
+      <div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:10px;margin-bottom:10px;font-size:10px;color:var(--t2);" id="serverStatus">
+        🔴 Server status: checking...
+      </div>
+      <div class="backup-row">
+        <button class="btn-backup" onclick="syncPull()">⬇️ PULL from Server</button>
+        <button class="btn-backup" onclick="syncPush()">⬆️ PUSH to Server</button>
+      </div>
+      <div id="syncResult" style="display:none;margin-top:8px;padding:8px 12px;border-radius:7px;font-size:11px;"></div>
+    </div>
+
+    <div style="margin-top:20px;border-top:1px solid var(--b1);padding-top:16px;">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:2px;margin-bottom:10px;font-family:var(--fd);">📝 QUICK ADD (Telegram-style)</div>
+      <textarea id="quickAddData" placeholder='Paste trade data here, contoh:&#10;EURUSD Buy 1.16123 SL 1.15996 TP 1.16392 Exit 1.15996 Lot 0.4 P/L -50.80' style="height:80px;font-size:11px;"></textarea>
+      <button class="btn-backup" onclick="quickAddTrade()" style="margin-top:8px;width:100%;">⚡ QUICK ADD TRADE</button>
+    </div>
+
     <div style="margin-top:20px;border-top:1px solid var(--b1);padding-top:16px;">
       <div style="font-size:9px;color:var(--t3);letter-spacing:2px;margin-bottom:10px;font-family:var(--fd);">DANGER ZONE</div>
       <button class="btn-danger" onclick="clearAll()">🗑️ HAPUS SEMUA DATA</button>
@@ -1487,6 +1511,164 @@ function renderCandles() {
     </div>`;
   }).join('');
 }
+
+// ============================================================
+// SERVER SYNC & QUICK ADD
+// ============================================================
+const SERVER_URL = 'http://43.163.109.32:3100';
+
+// Check server status on backup tab load
+function checkServerStatus() {
+  const el = document.getElementById('serverStatus');
+  if (!el) return;
+  el.innerHTML = '🟡 Checking server...';
+  fetch(SERVER_URL + '/api/status')
+    .then(r => r.json())
+    .then(d => {
+      el.innerHTML = `🟢 Server online · ${d.trades} trades · uptime ${Math.floor(d.uptime)}s`;
+    })
+    .catch(() => {
+      el.innerHTML = '🔴 Server offline — pastikan VPS running';
+    });
+}
+
+// Pull trades from server
+function syncPull() {
+  const el = document.getElementById('syncResult');
+  el.style.display = 'block';
+  el.style.background = 'rgba(68,170,255,.08)';
+  el.style.border = '1px solid rgba(68,170,255,.2)';
+  el.style.color = 'var(--blue)';
+  el.innerHTML = '⏳ Pulling from server...';
+
+  fetch(SERVER_URL + '/api/trades')
+    .then(r => r.json())
+    .then(data => {
+      const serverTrades = data.trades || [];
+      const existingIds = new Set(trades.map(t => t.id));
+      const newTrades = serverTrades.filter(t => !existingIds.has(t.id));
+      
+      if (newTrades.length === 0) {
+        el.innerHTML = '✅ Already up to date! No new trades.';
+        return;
+      }
+      
+      trades = [...trades, ...newTrades];
+      save();
+      renderHeader();
+      renderTrades();
+      renderBackupInfo();
+      checkServerStatus();
+      el.innerHTML = `✅ Pulled ${newTrades.length} new trade(s)! Total: ${trades.length}`;
+    })
+    .catch(err => {
+      el.style.background = 'rgba(255,51,102,.08)';
+      el.style.border = '1px solid rgba(255,51,102,.2)';
+      el.style.color = 'var(--red)';
+      el.innerHTML = '❌ Pull failed: ' + err.message;
+    });
+}
+
+// Push trades to server
+function syncPush() {
+  const el = document.getElementById('syncResult');
+  el.style.display = 'block';
+  el.style.background = 'rgba(68,170,255,.08)';
+  el.style.border = '1px solid rgba(68,170,255,.2)';
+  el.style.color = 'var(--blue)';
+  el.innerHTML = '⏳ Pushing to server...';
+
+  fetch(SERVER_URL + '/api/trades', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trades })
+  })
+    .then(r => r.json())
+    .then(data => {
+      el.innerHTML = `✅ Pushed! Server now has ${data.total} trade(s). Added: ${data.added}`;
+      checkServerStatus();
+    })
+    .catch(err => {
+      el.style.background = 'rgba(255,51,102,.08)';
+      el.style.border = '1px solid rgba(255,51,102,.2)';
+      el.style.color = 'var(--red)';
+      el.innerHTML = '❌ Push failed: ' + err.message;
+    });
+}
+
+// Quick add trade from text
+function quickAddTrade() {
+  const text = document.getElementById('quickAddData').value.trim();
+  if (!text) { toast('Paste trade data dulu!','err'); return; }
+
+  // Parse format: "EURUSD Buy 1.16123 SL 1.15996 TP 1.16392 Exit 1.15996 Lot 0.4 P/L -50.80"
+  const parts = text.split(/\s+/);
+  if (parts.length < 5) {
+    toast('Format tidak dikenali!','err');
+    return;
+  }
+
+  const pair = parts[0];
+  const direction = parts[1];
+  
+  const getValue = (key) => {
+    const idx = parts.indexOf(key);
+    return idx >= 0 && parts[idx + 1] ? parts[idx + 1] : '';
+  };
+
+  const entry = getValue('Entry') || parts[2] || '';
+  const sl = getValue('SL');
+  const tp = getValue('TP');
+  const exit = getValue('Exit');
+  const lot = getValue('Lot');
+  const plStr = getValue('P/L') || getValue('PL');
+  
+  // Determine result
+  let result = 'Running';
+  let pnlUsd = '';
+  if (plStr) {
+    const pl = parseFloat(plStr);
+    if (!isNaN(pl)) {
+      pnlUsd = pl.toFixed(2);
+      result = pl > 0 ? 'Win' : pl < 0 ? 'Loss' : 'BE';
+    }
+  }
+
+  const trade = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    date: new Date().toISOString().split('T')[0],
+    pair: pair,
+    direction: direction,
+    session: 'London',
+    signal: '7Candles',
+    setup: '7Candles',
+    result: result,
+    entry: entry,
+    sl: sl,
+    tp: tp,
+    exit: exit,
+    lot: lot,
+    pnlPips: '',
+    pnlUsd: pnlUsd,
+    rr: '',
+    rrPlanned: '',
+    notes: '#T' + (trades.length + 1)
+  };
+
+  trades.unshift(trade);
+  save();
+  renderHeader();
+  renderTrades();
+  document.getElementById('quickAddData').value = '';
+  toast('Trade added ✓', 'ok');
+}
+
+// Override renderBackupInfo to also check server status
+const origRenderBackupInfo = renderBackupInfo;
+renderBackupInfo = function() {
+  origRenderBackupInfo();
+  checkServerStatus();
+};
 
 // ============================================================
 // INIT
