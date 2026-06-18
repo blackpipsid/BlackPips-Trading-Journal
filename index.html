@@ -330,6 +330,7 @@ select option { background:var(--s2); }
   <button class="nav-btn active" onclick="switchTab('trades')">📋 TRADES</button>
   <button class="nav-btn" onclick="switchTab('stats')">📊 STATS</button>
   <button class="nav-btn" onclick="switchTab('entry')">➕ ENTRY</button>
+  <button class="nav-btn" onclick="switchTab('candles')">🕯️ 7CANDLES</button>
   <button class="nav-btn" onclick="switchTab('backup')">💾 BACKUP</button>
 </div>
 
@@ -358,6 +359,16 @@ select option { background:var(--s2); }
         <option value="">BUY & SELL</option>
         <option>Buy</option><option>Sell</option>
       </select>
+      <select id="fSignal" onchange="renderTrades()">
+        <option value="">ALL SIGNALS</option>
+        <option>7Candles</option>
+        <option>TradingView</option>
+        <option>News</option>
+        <option>Other</option>
+        <option>Manual</option>
+      </select>
+    </div>
+    <div class="filter-row" style="margin-top:-4px">
       <input type="date" id="fDateFrom" onchange="renderTrades()" placeholder="From date" style="flex:1">
       <input type="date" id="fDateTo" onchange="renderTrades()" placeholder="To date" style="flex:1">
     </div>
@@ -401,6 +412,16 @@ select option { background:var(--s2); }
         <label>SESSION</label>
         <select id="fSession">
           <option>Asia</option><option>London</option><option>New York</option><option>Overlap</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>SIGNAL SOURCE</label>
+        <select id="fSignal">
+          <option value="">—Manual—</option>
+          <option>7Candles</option>
+          <option>TradingView</option>
+      <option>News</option>
+          <option>Other</option>
         </select>
       </div>
       <div class="field">
@@ -510,6 +531,42 @@ select option { background:var(--s2); }
   </div>
 </div>
 
+<!-- ============ TAB: 7CANDLES ============ -->
+<div class="tab" id="tab-candles">
+  <div class="section">
+    <div style="font-family:var(--fd);font-size:13px;font-weight:700;color:var(--t2);letter-spacing:2px;padding:8px 0 12px;border-bottom:1px solid var(--b1);margin-bottom:4px;">
+      🕯️ 7CANDLES SIGNAL & ANALYSIS
+    </div>
+
+    <!-- 7Candles Rules -->
+    <div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:12px;">
+      <div style="font-size:9px;color:var(--yellow);letter-spacing:2px;margin-bottom:10px;font-family:var(--fd);font-weight:700;">📐 7CANDLES RULES</div>
+      <div style="font-size:11px;color:var(--text);line-height:2;">
+        1. <b>Scan 7 closed H1 candles</b> — count bull vs bear (exclude doji)<br>
+        2. <b>Net movement</b> — total pips dari 7 candles<br>
+        3. <b>Alignment</b> — minimal 5 dari 7 candles searah<br>
+        4. <b>D1 confirmation</b> — arah harus sesuai trend D1<br>
+        5. <b>Entry</b> — di pullback candle ke-8<br>
+        6. <b>SL</b> — di bawah/atas candle ke-7<br>
+        7. <b>TP</b> — 1:2 RR minimum
+      </div>
+    </div>
+
+    <!-- Signal Pairs -->
+    <div style="font-size:9px;color:var(--t2);letter-spacing:2px;margin-bottom:8px;font-family:var(--fd);font-weight:700;">🎯 SIGNAL PAIRS</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;" id="candlesPairs"></div>
+
+    <!-- 7Candles Performance -->
+    <div id="candlesStats"></div>
+
+    <!-- 7Candles Trade Log -->
+    <div style="font-size:9px;color:var(--t2);letter-spacing:2px;margin-bottom:8px;font-family:var(--fd);font-weight:700;margin-top:14px;">📋 7CANDLES TRADE LOG</div>
+    <div id="candlesTradeList"></div>
+
+    <div style="height:20px"></div>
+  </div>
+</div>
+
 <!-- HIDDEN FILE INPUT FOR IMPORT -->
 <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
 
@@ -554,13 +611,7 @@ function toast(msg, type='ok') {
 // TABS
 // ============================================================
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
-  event.target.classList.add('active');
-  if(name==='trades') renderTrades();
-  if(name==='stats') renderStats();
-  if(name==='backup') renderBackupInfo();
+  switchTabDirect(name);
 }
 
 // ============================================================
@@ -654,6 +705,7 @@ function renderTrades() {
   const fp = document.getElementById('fPair').value;
   const fr = document.getElementById('fResult').value;
   const fd = document.getElementById('fDir').value;
+  const fs = document.getElementById('fSignal').value;
   const fdf = document.getElementById('fDateFrom').value;
   const fdt = document.getElementById('fDateTo').value;
 
@@ -661,6 +713,7 @@ function renderTrades() {
     if(fp && t.pair!==fp) return false;
     if(fr && t.result!==fr) return false;
     if(fd && t.direction!==fd) return false;
+    if(fs && t.signal!==fs) return false;
     if(fdf && t.date<fdf) return false;
     if(fdt && t.date>fdt) return false;
     return true;
@@ -692,6 +745,7 @@ function renderTrades() {
           <span class="badge-pair" style="color:${pc};border-color:${pc}22;background:${pc}10">${t.pair}</span>
           <span class="badge-dir" style="color:${dc};background:${dBg}">${t.direction==='Buy'?'▲':'▼'} ${t.direction.toUpperCase()}</span>
           <span style="font-size:9px;color:var(--t2)">${t.session||''}</span>
+          ${t.signal?`<span style="font-size:8px;padding:1px 6px;border-radius:3px;border:1px solid rgba(255,204,68,.3);color:var(--yellow);background:rgba(255,204,68,.08);letter-spacing:.5px">${t.signal.toUpperCase()}</span>`:''}
         </div>
         <div class="tc-right">
           <span class="badge-result" style="color:${rc};background:${rb}">${t.result.toUpperCase()}</span>
@@ -1140,6 +1194,7 @@ function saveTrade() {
     pair: pair,
     direction: document.getElementById('fDirE').value,
     session: document.getElementById('fSession').value,
+    signal: document.getElementById('fSignal').value,
     setup: document.getElementById('fSetup').value,
     result: document.getElementById('fResult2').value,
     entry: document.getElementById('fEntry').value,
@@ -1180,6 +1235,7 @@ function cancelEdit() {
   document.getElementById('fPairE').value='XAUUSD';
   document.getElementById('fDirE').value='Buy';
   document.getElementById('fSession').value='London';
+  document.getElementById('fSignal').value='';
   document.getElementById('fSetup').value='Trend Follow';
   document.getElementById('fResult2').value='Running';
   ['fEntry','fSL','fTP','fExit','fLot','fPips','fUsd','fRR','fNotes'].forEach(id=>document.getElementById(id).value='');
@@ -1194,6 +1250,7 @@ function editTrade(id) {
   document.getElementById('fPairE').value=t.pair||'XAUUSD';
   document.getElementById('fDirE').value=t.direction||'Buy';
   document.getElementById('fSession').value=t.session||'London';
+  document.getElementById('fSignal').value=t.signal||'';
   document.getElementById('fSetup').value=t.setup||'Trend Follow';
   document.getElementById('fResult2').value=t.result||'Running';
   document.getElementById('fEntry').value=t.entry||'';
@@ -1294,18 +1351,142 @@ function switchTabDirect(name) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  const idx={trades:0,stats:1,entry:2,backup:3}[name];
-  document.querySelectorAll('.nav-btn')[idx].classList.add('active');
+  const idx={trades:0,stats:1,entry:2,candles:3,backup:4}[name];
+  document.querySelectorAll('.nav-btn')[idx]?.classList.add('active');
   if(name==='trades') renderTrades();
   if(name==='stats') renderStats();
+  if(name==='candles') renderCandles();
   if(name==='backup') renderBackupInfo();
 }
 
 // Override nav-btn onclick to not use event
 document.querySelectorAll('.nav-btn').forEach((btn,i)=>{
-  const tabs=['trades','stats','entry','backup'];
+  const tabs=['trades','stats','entry','candles','backup'];
   btn.onclick=()=>switchTabDirect(tabs[i]);
 });
+
+// ============================================================
+// RENDER: 7CANDLES TAB
+// ============================================================
+function renderCandles() {
+  const candleTrades = trades.filter(t => t.signal === '7Candles');
+  const st = getStats(candleTrades);
+  const allSt = getStats(trades);
+
+  // Render pair cards
+  const pairs = ['GBPJPY','AUDUSD','USDJPY','XAUUSD','EURUSD'];
+  const pairData = pairs.map(p => {
+    const pt = candleTrades.filter(t => t.pair === p);
+    const ps = getStats(pt);
+    return { pair: p, total: pt.length, wr: ps.wr, pnl: ps.totalPnl, wins: ps.wins.length, losses: ps.losses.length };
+  });
+
+  document.getElementById('candlesPairs').innerHTML = pairData.map(pd => `
+    <div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:10px;text-align:center;">
+      <div style="font-size:12px;font-weight:700;color:${PAIR_COLORS[pd.pair]||'#fff'}">${pd.pair}</div>
+      <div style="font-size:8px;color:var(--t3);margin-top:3px">${pd.total} trades · ${pd.wr.toFixed(0)}% WR</div>
+      <div style="font-size:10px;color:${pd.pnl>=0?'var(--green)':'var(--red)'};font-weight:700;margin-top:2px">${pd.pnl>=0?'+':''}$${pd.pnl.toFixed(2)}</div>
+    </div>
+  `).join('');
+
+  // Render stats
+  document.getElementById('candlesStats').innerHTML = `
+    <div class="stats-title">7CANDLES PERFORMANCE</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-val" style="color:${st.wr>=50?'var(--green)':'var(--red')}">${candleTrades.length?st.wr.toFixed(1)+'%':'—'}</div>
+        <div class="stat-lbl">WIN RATE</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:${st.totalPnl>=0?'var(--green)':'var(--red')}">${st.totalPnl>=0?'+':''}$${st.totalPnl.toFixed(2)}</div>
+        <div class="stat-lbl">NET P&L</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--text)">${candleTrades.length}</div>
+        <div class="stat-lbl">SIGNALS</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--yellow)">${st.avgRR>0?'1:'+st.avgRR.toFixed(1):'—'}</div>
+        <div class="stat-lbl">AVG RR</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--green)">${st.wins.length}</div>
+        <div class="stat-lbl">WINS</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--red)">${st.losses.length}</div>
+        <div class="stat-lbl">LOSSES</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--text)">${st.profitFactor===999?'∞':st.profitFactor.toFixed(2)}</div>
+        <div class="stat-lbl">PROFIT FACTOR</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:${st.totalPnl>=0?'var(--green)':'var(--red')}">${allSt.totalPnl>0?((st.totalPnl/allSt.totalPnl)*100).toFixed(0)+'%':'—'}</div>
+        <div class="stat-lbl">% OF TOTAL</div>
+      </div>
+    </div>
+
+    <div class="stats-title">7CANDLES vs OVERALL</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <div style="background:rgba(255,204,68,.06);border:1px solid rgba(255,204,68,.15);border-radius:8px;padding:10px;">
+        <div style="font-size:8px;color:var(--yellow);letter-spacing:2px;margin-bottom:5px;">7CANDLES</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${st.wins.length}W / ${st.losses.length}L / ${st.bes.length}BE</div>
+        <div style="font-size:10px;color:var(--t2);margin-top:3px">PF: ${st.profitFactor===999?'∞':st.profitFactor.toFixed(2)}</div>
+      </div>
+      <div style="background:rgba(68,170,255,.06);border:1px solid rgba(68,170,255,.15);border-radius:8px;padding:10px;">
+        <div style="font-size:8px;color:var(--blue);letter-spacing:2px;margin-bottom:5px;">OVERALL</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${allSt.wins.length}W / ${allSt.losses.length}L / ${allSt.bes.length}BE</div>
+        <div style="font-size:10px;color:var(--t2);margin-top:3px">PF: ${allSt.profitFactor===999?'∞':allSt.profitFactor.toFixed(2)}</div>
+      </div>
+    </div>
+  `;
+
+  // Render 7Candles trade list
+  const listEl = document.getElementById('candlesTradeList');
+  if(!candleTrades.length) {
+    listEl.innerHTML = `<div class="empty"><div class="e-icon">🕯️</div><p>BELUM ADA 7CANDLES TRADE<br>Log trade dengan signal "7Candles" di ➕ ENTRY</p></div>`;
+    return;
+  }
+
+  const sorted = [...candleTrades].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  listEl.innerHTML = sorted.map(t => {
+    const pc = PAIR_COLORS[t.pair]||'#fff';
+    const rc = RESULT_COLOR[t.result]||'#fff';
+    const rb = RESULT_BG[t.result]||'transparent';
+    const pnlSign = parseFloat(t.pnlUsd)>=0?'+':'';
+    const pipSign = parseFloat(t.pnlPips)>=0?'+':'';
+    const dc = t.direction==='Buy'?'#66dd88':'#ff5577';
+    const dBg = t.direction==='Buy'?'rgba(102,221,136,.1)':'rgba(255,85,119,.1)';
+    return `
+    <div class="trade-card ${t.result.toLowerCase()}">
+      <div class="tc-top">
+        <div class="tc-left">
+          <span class="badge-pair" style="color:${pc};border-color:${pc}22;background:${pc}10">${t.pair}</span>
+          <span class="badge-dir" style="color:${dc};background:${dBg}">${t.direction==='Buy'?'▲':'▼'} ${t.direction.toUpperCase()}</span>
+          <span style="font-size:8px;padding:1px 6px;border-radius:3px;border:1px solid rgba(255,204,68,.3);color:var(--yellow);background:rgba(255,204,68,.08)">7CANDLES</span>
+        </div>
+        <div class="tc-right">
+          <span class="badge-result" style="color:${rc};background:${rb}">${t.result.toUpperCase()}</span>
+          <button class="icon-btn" onclick="editTrade('${t.id}')" title="Edit">✏️</button>
+          <button class="icon-btn" onclick="deleteTrade('${t.id}')" title="Delete">🗑️</button>
+        </div>
+      </div>
+      <div class="tc-meta">${t.date} · ${t.setup||''} · ${t.session||''}</div>
+      <div class="tc-grid">
+        <div class="tc-field"><div class="lbl">ENTRY</div><div class="val">${t.entry||'—'}</div></div>
+        <div class="tc-field"><div class="lbl">SL</div><div class="val">${t.sl||'—'}</div></div>
+        <div class="tc-field"><div class="lbl">TP</div><div class="val">${t.tp||'—'}</div></div>
+        <div class="tc-field"><div class="lbl">LOT</div><div class="val">${t.lot||'—'}</div></div>
+        <div class="tc-field"><div class="lbl">PIPS</div><div class="val" style="color:${parseFloat(t.pnlPips)>=0?'var(--green)':'var(--red)'}">${t.pnlPips?pipSign+t.pnlPips:'—'}</div></div>
+        <div class="tc-field"><div class="lbl">P&L $</div><div class="val" style="color:${parseFloat(t.pnlUsd)>=0?'var(--green)':'var(--red)'}">${t.pnlUsd?pnlSign+'$'+t.pnlUsd:'—'}</div></div>
+        <div class="tc-field"><div class="lbl">RR</div><div class="val">${t.rr?'1:'+t.rr:'—'}</div></div>
+        <div class="tc-field"><div class="lbl">RR PLAN</div><div class="val">${t.rrPlanned?'1:'+t.rrPlanned:'—'}</div></div>
+      </div>
+      ${t.notes?`<div class="tc-notes">💬 ${t.notes}</div>`:''}
+    </div>`;
+  }).join('');
+}
 
 // ============================================================
 // INIT
